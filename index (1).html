@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Velyqora – Télécharge tes vidéos en toute simplicité</title>
+<style>
+  :root {
+    --fond: #000;
+    --carte: #0f172a;
+    --texte: #ffffff;
+    --texte-doux: #cbd5e1;
+    --teal: #14b8a6;
+    --teal-clair: #5eead4;
+    --teal-fonce: #0f9b8c;
+    --erreur: #fca5a5;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; min-height: 100vh; display: grid; place-items: center;
+    background: var(--fond); color: var(--texte);
+    font-family: Roboto, "Segoe UI", system-ui, sans-serif;
+    padding: 16px;
+  }
+  .carte {
+    width: 100%; max-width: 480px; background: var(--carte);
+    border-radius: 28px; padding: 40px 24px 32px; text-align: center;
+  }
+  .marque { display: flex; align-items: center; justify-content: center; gap: 14px; margin-bottom: 28px; }
+  .marque svg { width: 40px; height: 40px; flex: none; }
+  .marque span { font-size: clamp(1.8rem, 8vw, 2.4rem); font-weight: 600; letter-spacing: -0.01em; }
+  .slogan { margin: 0 0 28px; color: var(--texte-doux); font-size: 1.1rem; }
+  input {
+    font: inherit; font-size: 1.05rem; width: 100%; padding: 18px 20px;
+    border: 0; border-radius: 22px; background: #fff; color: #111827;
+  }
+  input::placeholder { color: #6b7280; }
+  button {
+    font: inherit; font-size: 1.2rem; font-weight: 600; width: 100%; margin-top: 16px;
+    padding: 20px; border: 0; border-radius: 22px; background: var(--teal); color: #fff; cursor: pointer;
+  }
+  button:hover { background: var(--teal-fonce); }
+  button:disabled { opacity: .65; cursor: wait; }
+  input:focus-visible, button:focus-visible { outline: 3px solid var(--teal-clair); outline-offset: 3px; }
+  #etat { min-height: 1.5em; margin-top: 16px; font-weight: 500; }
+  #etat.erreur { color: var(--erreur); }
+  #etat.ok { color: var(--teal-clair); }
+  .plateformes { display: flex; flex-wrap: wrap; justify-content: center; gap: 10px 28px; margin: 20px 0 0; padding: 0; list-style: none; font-size: 1.05rem; }
+  .note { margin: 24px 0 0; font-size: .8rem; color: #94a3b8; }
+</style>
+</head>
+<body>
+<main class="carte">
+  <div class="marque">
+    <svg viewBox="0 0 40 40" aria-hidden="true">
+      <circle cx="20" cy="20" r="17.5" fill="none" stroke="#5eead4" stroke-width="3.5"/>
+      <path d="M20 11v15M13.5 20l6.5 6.5 6.5-6.5" fill="none" stroke="#5eead4" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <span>Velyqora</span>
+  </div>
+  <p class="slogan">Télécharge tes vidéos en toute simplicité</p>
+
+  <input id="lien" type="url" inputmode="url" placeholder="Colle le lien de ta vidéo ici..." autocomplete="off" aria-label="Lien de la vidéo">
+  <button id="btn">↓ Télécharger la vidéo</button>
+  <div id="etat" role="status" aria-live="polite"></div>
+
+  <ul class="plateformes">
+    <li>TikTok</li><li>Facebook</li><li>Instagram</li><li>X</li><li>YouTube</li>
+  </ul>
+  <p class="note">Télécharge uniquement des vidéos que tu as le droit de conserver.</p>
+</main>
+
+<script>
+const lien = document.getElementById("lien");
+const btn = document.getElementById("btn");
+const etat = document.getElementById("etat");
+
+function message(texte, type = "") {
+  etat.textContent = texte;
+  etat.className = type;
+}
+
+async function telecharger() {
+  const url = lien.value.trim();
+  if (!url) { message("Colle d'abord un lien.", "erreur"); return; }
+
+  btn.disabled = true;
+  message("Téléchargement en cours…");
+
+  try {
+    const rep = await fetch("/api/download", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url })
+    });
+
+    if (!rep.ok) {
+      const err = await rep.json().catch(() => ({}));
+      throw new Error(err.error || "Le téléchargement a échoué.");
+    }
+
+    const blob = await rep.blob();
+    const fichier = new File([blob], "video.mp4", { type: "video/mp4" });
+
+    // Sur téléphone : menu de partage (« Enregistrer la vidéo » → galerie)
+    if (navigator.canShare && navigator.canShare({ files: [fichier] })) {
+      try {
+        await navigator.share({ files: [fichier] });
+        message("Vidéo prête. Choisis « Enregistrer la vidéo ».", "ok");
+        return;
+      } catch (e) {
+        if (e.name === "AbortError") { message("Partage annulé."); return; }
+      }
+    }
+
+    // Sinon : téléchargement classique
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = "video.mp4";
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    message("Vidéo téléchargée.", "ok");
+  } catch (e) {
+    message(e.message, "erreur");
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+btn.addEventListener("click", telecharger);
+lien.addEventListener("keydown", e => { if (e.key === "Enter") telecharger(); });
+</script>
+</body>
+</html>
